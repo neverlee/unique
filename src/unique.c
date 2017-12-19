@@ -41,7 +41,6 @@ int UniqueGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModuleKey *key =
         RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
 
-    printf(">>> get key\n");
     int type = RedisModule_KeyType(key);
     if (type == REDISMODULE_KEYTYPE_EMPTY) {
         RedisModule_ReplyWithNull(ctx);
@@ -52,7 +51,13 @@ int UniqueGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     }
 
+    long long k;
+    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[2], &k)) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
     dict *d = (dict*)RedisModule_ModuleTypeGetValue(key);
+    
     dictEntry *de = dictFind(d,key);
     if (de == NULL) {
         RedisModule_ReplyWithNull(ctx);
@@ -84,10 +89,6 @@ int UniqueSetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[2], &k) ||
         REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &v)) {
         return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-    }
-    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &v)) {
-        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
-        return REDISMODULE_ERR;
     }
 
     dict *d;
@@ -191,8 +192,8 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         .free = UniqueTypeFree,
         .digest = UniqueTypeDigest
     };
-    
-    UniqueType = RedisModule_CreateDataType(ctx,"unique",0,&tm);
+
+    UniqueType = RedisModule_CreateDataType(ctx,"uniqueTyp",0,&tm);
     if (UniqueType == NULL) return REDISMODULE_ERR;
 
     printf(">>> load error2\n");
