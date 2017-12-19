@@ -32,11 +32,81 @@ dictType uniqueDictType = {
 
 
 int UniqueGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 3) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+
+    printf(">>> get key\n");
+    int type = RedisModule_KeyType(key);
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
+
+    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    dict *d = (dict*)RedisModule_ModuleTypeGetValue(key);
+    dictEntry *de = dictFind(d,key);
+    if (de == NULL) {
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
+
+    RedisModule_ReplyWithLongLong(ctx, (long long)de->key);
     return REDISMODULE_OK;
 }
+
 int UniqueSetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
+
+    int type = RedisModule_KeyType(key);
+    if (type != REDISMODULE_KEYTYPE_EMPTY &&
+        RedisModule_ModuleTypeGetType(key) != UniqueType)
+    {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    long long k, v;
+    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[2], &k) ||
+        REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &v)) {
+        return RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+    if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[3], &v)) {
+        RedisModule_ReplyWithError(ctx, REDISMODULE_ERRORMSG_WRONGTYPE);
+        return REDISMODULE_ERR;
+    }
+
+    dict *d;
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        d = dictCreate(&uniqueDictType,NULL);
+        RedisModule_ModuleTypeSetValue(key,UniqueType,d);
+    } else {
+        d = (dict*)RedisModule_ModuleTypeGetValue(key);
+    }
+
+    if (DICT_OK == dictAdd(d, (void*)k,(void*)v)) {
+        RedisModule_ReplyWithSimpleString(ctx, "OK");
+    } else {
+        RedisModule_ReplyWithSimpleString(ctx, "FAIL");
+    }
+
     return REDISMODULE_OK;
 }
+
 int UniqueDelCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     return REDISMODULE_OK;
 }
@@ -84,7 +154,7 @@ size_t UniqueTypeMemUsage(const void *value) {
     // const struct UniqueTypeObject *hto = value;
     // struct UniqueTypeNode *node = hto->head;
     // return sizeof(*hto) + sizeof(*node)*hto->len;
-    return 1024;
+    return 0;
 }
 
 
@@ -109,7 +179,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     REDISMODULE_NOT_USED(argv);
     REDISMODULE_NOT_USED(argc);
 
-    if (RedisModule_Init(ctx,"Unique",1,REDISMODULE_APIVER_1)
+    if (RedisModule_Init(ctx,"unique",1,REDISMODULE_APIVER_1)
             == REDISMODULE_ERR) return REDISMODULE_ERR;
 
     RedisModuleTypeMethods tm = {
@@ -122,9 +192,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         .digest = UniqueTypeDigest
     };
     
-    UniqueType = RedisModule_CreateDataType(ctx,"uniquetype",0,&tm);
+    UniqueType = RedisModule_CreateDataType(ctx,"unique",0,&tm);
     if (UniqueType == NULL) return REDISMODULE_ERR;
 
+    printf(">>> load error2\n");
     if (RedisModule_CreateCommand(ctx, "unique.set", UniqueSetCommand,
                 "write fast deny-oom", 1, 1,
                 1) == REDISMODULE_ERR)
