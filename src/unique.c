@@ -58,13 +58,13 @@ int UniqueGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
 
     dict *d = (dict*)RedisModule_ModuleTypeGetValue(key);
     
-    dictEntry *de = dictFind(d,key);
+    dictEntry *de = dictFind(d,k);
     if (de == NULL) {
         RedisModule_ReplyWithNull(ctx);
         return REDISMODULE_OK;
     }
 
-    RedisModule_ReplyWithLongLong(ctx, (long long)de->key);
+    RedisModule_ReplyWithLongLong(ctx, (long long)de->v.u64);
     return REDISMODULE_OK;
 }
 
@@ -196,7 +196,6 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     UniqueType = RedisModule_CreateDataType(ctx,"uniqueTyp",0,&tm);
     if (UniqueType == NULL) return REDISMODULE_ERR;
 
-    printf(">>> load error2\n");
     if (RedisModule_CreateCommand(ctx, "unique.set", UniqueSetCommand,
                 "write fast deny-oom", 1, 1,
                 1) == REDISMODULE_ERR)
