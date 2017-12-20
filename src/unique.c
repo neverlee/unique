@@ -121,6 +121,7 @@ int UniqueLenCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     
     size_t len = uniqueLen(unique);
     RedisModule_ReplyWithLongLong(ctx, len);
+
     return REDISMODULE_OK;
 }
 
@@ -216,12 +217,13 @@ void UniqueTypeAofRewrite(RedisModuleIO *aof, RedisModuleString *key, void *valu
 /* The goal of this function is to return the amount of memory used by
  * the UniqueType value. */
 size_t UniqueTypeMemUsage(const void *value) {
-    unique *unique = value;
+    const unique *unique = value;
     size_t list = listLength(unique->l) * sizeof(listNode) + sizeof(list);
 
-    return list + unique->mem;
+    size_t dict = sizeof(dict) + 2*sizeof(dictht) + 
+        dictSlots(unique->d) * sizeof(dictEntry);
+    return list + dict + unique->mem;
 }
-
 
 void UniqueTypeFree(void *value) {
     uniqueRelease(value);
