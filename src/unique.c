@@ -208,7 +208,7 @@ void UniqueTypeAofRewrite(RedisModuleIO *aof, RedisModuleString *key, void *valu
         dictEntry *en = node->value;
         k = en->key;
         v = en->v.val;
-        RedisModule_EmitAOF(aof,"unique.push","sbb",key,k, sdslen(k), v, sdslen(v));
+        RedisModule_EmitAOF(aof,"unique.pushup","sbb",key,k, sdslen(k), v, sdslen(v));
     }
 
 }
@@ -219,7 +219,7 @@ size_t UniqueTypeMemUsage(const void *value) {
     unique *unique = value;
     size_t list = listLength(unique->l) * sizeof(listNode) + sizeof(list);
 
-    return list;
+    return list + unique->mem;
 }
 
 
@@ -268,6 +268,11 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
         return REDISMODULE_ERR;
 
     if (RedisModule_CreateCommand(ctx, "unique.pushnx", UniquePushNXCommand,
+                "write fast deny-oom", 1, 1,
+                1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.pop", UniquePopCommand,
                 "write fast deny-oom", 1, 1,
                 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;

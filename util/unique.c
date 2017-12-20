@@ -94,7 +94,7 @@ int uniquePush(unique *unique, void *key, void *val, mergefn fn) {
     entry = dictAddRaw(unique->d,key,&existing);
     en = entry ? entry : existing;
 
-    if (entry) {  // insert new
+    if (entry) {
         en->v.val = val;
         listAddNodeTail(unique->l, en);
         return 1;
@@ -120,7 +120,7 @@ int uniquePop(unique *unique, void *pkey, void *pval) {
     en->v.val = NULL;
     *((sds*)pkey) = key;
     *((sds*)pval) = val;
-    dictDelete(unique->d, en);
+    dictDelete(unique->d, key);
     return 0;
 }
 
