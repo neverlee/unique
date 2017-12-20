@@ -5,6 +5,7 @@
 #include "dict.h"
 #include "sds.h"
 #include "zmalloc.h"
+#include "unique.h"
 
 
 uint64_t sdshashCallback(const void *key) {

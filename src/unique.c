@@ -8,7 +8,7 @@
 
 static RedisModuleType *UniqueType;
 
-int UniquePushCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static int UniquePushCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, mergefn fn) {
     if (argc != 4) {
         return RedisModule_WrongArity(ctx);
     }
@@ -43,14 +43,23 @@ int UniquePushCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     skey = sdsnewlen(pkey, skeylen);
     sval = sdsnewlen(pval, svallen);
 
-    int n = uniquePush(unique, skey, sval, retain_new);
+    int n = uniquePush(unique, skey, sval, fn);
     if (n == -1) {
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+        RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     } else {
-        return RedisModule_ReplyWithLongLong(ctx, n);
+        RedisModule_ReplyWithLongLong(ctx, n);
     }
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
 }
 
+
+int UniquePushUPCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return UniquePushCommand(ctx, argv, argc, retain_new);
+}
+int UniquePushNXCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return UniquePushCommand(ctx, argv, argc, retain_old);
+}
 
 int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 2) {
@@ -219,10 +228,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
     UniqueType = RedisModule_CreateDataType(ctx,"uniqueTyp",0,&tm);
     if (UniqueType == NULL) return REDISMODULE_ERR;
 
-    if (RedisModule_CreateCommand(ctx, "unique.push", UniquePushCommand,
+    if (RedisModule_CreateCommand(ctx, "unique.pushup", UniquePushUPCommand,
                 "write fast deny-oom", 1, 1,
                 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.pushnx", UniquePushNXCommand,
+                "write fast deny-oom", 1, 1,
+                1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
 
     if (RedisModule_CreateCommand(ctx, "unique.pop", UniquePopCommand,
                 "write fast deny-oom", 1, 1, 1) == REDISMODULE_ERR)
