@@ -72,24 +72,30 @@ void uniqueRelease(unique *unique)
     zfree(unique);
 }
 
-void *retain_old(void *old, void *new) {
+typedef int mergefn(void *old, void *new, void **merge);
+
+int retain_old(void *old, void *new, void **merge) {
     sdsfree(new);
-    return old;
+    *merge = old;
+    return 0;
 }
-void *retain_new(void *old, void *new) {
+int retain_new(void *old, void *new, void **merge) {
     sdsfree(old);
-    return new;
+    *merge = new;
+    return 0;
 }
-void *merge_int64(void *old, void *new) {
-    sdsfree(old);
-    return new;
+int merge_int64(void *old, void *new, void **merge) {
+    sdsfree(new);
+    *merge = old;
+    return 0;
 }
-void *merge_float64(void *old, void *new) {
-    sdsfree(old);
-    return new;
+int merge_float64(void *old, void *new, void **merge) {
+    sdsfree(new);
+    *merge = old;
+    return 0;
 }
 
-int uniquePush(unique *unique, void *key, void *val) {
+int uniquePush(unique *unique, void *key, void *val, mergefn fn) {
     dictEntry *en;
     dictEntry *entry, *existing;
     entry = dictAddRaw(unique->d,key,&existing);
@@ -101,9 +107,8 @@ int uniquePush(unique *unique, void *key, void *val) {
         return 1;
     } else {
         sdsfree(key);
-        en->v.val = retain_old(en->v.val, val);
+        return fn(en->v.val, val, &(en->v.val));
     }
-    return 0;
 }
 
 int uniquePop(unique *unique, void *pkey, void *pval) {

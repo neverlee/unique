@@ -41,11 +41,12 @@ int UniquePushCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     skey = sdsnewlen(pkey, skeylen);
     sval = sdsnewlen(pval, svallen);
 
-    uniquePush(unique, skey, sval);
-
-    RedisModule_ReplyWithSimpleString(ctx, "OK");
-
-    return REDISMODULE_OK;
+    int n = uniquePush(unique, skey, sval, retain_new);
+    if (n == -1) {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    } else {
+        return RedisModule_ReplyWithLongLong(ctx, n);
+    }
 }
 
 
