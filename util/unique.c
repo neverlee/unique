@@ -7,12 +7,6 @@
 #include "zmalloc.h"
 
 
-typedef struct unique{
-    dict *d;
-    list *l;
-    size_t mem;
-}unique;
-
 uint64_t sdshashCallback(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
@@ -71,8 +65,6 @@ void uniqueRelease(unique *unique)
     unique->mem = 0;
     zfree(unique);
 }
-
-typedef int mergefn(void *old, void *new, void **merge);
 
 int retain_old(void *old, void *new, void **merge) {
     sdsfree(new);
