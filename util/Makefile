@@ -5,7 +5,7 @@ CFLAGS = -g -fPIC -O3 -I$(RM_INCLUDE_DIR) -Wall -Wno-unused-function ## -std=gnu
 LDFLAGS = -g -lc -lm
 CC=gcc
 
-OBJS = dict.o siphash.o adlist.o sds.c
+OBJS = dict.o siphash.o adlist.o sds.o unique.o
 
 all: libutil.a
 
