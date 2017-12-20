@@ -78,13 +78,46 @@ int retain_new(void *old, void *new, void **merge) {
     return 0;
 }
 int merge_int64(void *old, void *new, void **merge) {
-    sdsfree(new);
-    *merge = old;
+    size_t lold= sdslen(old), lnew = sdslen(new);
+    if (lold % 8 !=0 ) {
+        return -1;
+    }
+    long long *pla, *plb;
+    int i, n;
+    if (lnew > lold) {
+        pla = new, plb = old;
+        n = lold/8;
+    } else {
+        pla = old, plb = new;
+        n = lnew/8;
+    }
+    for (i=0; i<n; i++) {
+        pla[i] += plb[i];
+    }
+    sdsfree((void*)plb);
+    *merge = pla;
     return 0;
 }
 int merge_float64(void *old, void *new, void **merge) {
-    sdsfree(new);
-    *merge = old;
+    size_t lold, lnew;
+    lold = sdslen(old), lnew = sdslen(new);
+    if (lold % 8 !=0 ) {
+        return -1;
+    }
+    double *pla, *plb;
+    int i, n;
+    if (lnew > lold) {
+        pla = new, plb = old;
+        n = lold/8;
+    } else {
+        pla = old, plb = new;
+        n = lnew/8;
+    }
+    for (i=0; i<n; i++) {
+        pla[i] += plb[i];
+    }
+    sdsfree((void*)plb);
+    *merge = pla;
     return 0;
 }
 

@@ -61,6 +61,113 @@ int UniquePushNXCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return UniquePushCommand(ctx, argv, argc, retain_old);
 }
 
+int UniquePushIVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
+
+    int type = RedisModule_KeyType(key);
+    if (type != REDISMODULE_KEYTYPE_EMPTY &&
+        RedisModule_ModuleTypeGetType(key) != UniqueType)
+    {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    unique *unique;
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        unique = uniqueCreate();
+        RedisModule_ModuleTypeSetValue(key,UniqueType,unique);
+    } else {
+        unique = RedisModule_ModuleTypeGetValue(key);
+    }
+
+    sds skey, sval;
+    size_t skeylen, svallen;
+    const char *pkey;
+    unsigned int lvec = argc-3;
+
+    pkey = RedisModule_StringPtrLen(argv[2], &skeylen);
+    svallen = lvec *8;
+
+    skey = sdsnewlen(pkey, skeylen);
+    sval = sdsnewlen(NULL, svallen);
+    long long *vec = (long long*)sval;
+    int i;
+    for (i=3; i<argc; i++) {
+        if (REDISMODULE_OK != RedisModule_StringToLongLong(argv[i], vec+i-3)) {
+            return RedisModule_WrongArity(ctx);
+        }
+    }
+
+    int n = uniquePush(unique, skey, sval, merge_int64);
+    if (n == -1) {
+        RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    } else {
+        RedisModule_ReplyWithLongLong(ctx, n);
+    }
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
+int UniquePushFVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc < 4) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ | REDISMODULE_WRITE);
+
+    int type = RedisModule_KeyType(key);
+    if (type != REDISMODULE_KEYTYPE_EMPTY &&
+        RedisModule_ModuleTypeGetType(key) != UniqueType)
+    {
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    unique *unique;
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        unique = uniqueCreate();
+        RedisModule_ModuleTypeSetValue(key,UniqueType,unique);
+    } else {
+        unique = RedisModule_ModuleTypeGetValue(key);
+    }
+
+    sds skey, sval;
+    size_t skeylen, svallen;
+    const char *pkey;
+    unsigned int lvec = argc-3;
+
+    pkey = RedisModule_StringPtrLen(argv[2], &skeylen);
+    svallen = lvec *8;
+
+    skey = sdsnewlen(pkey, skeylen);
+    sval = sdsnewlen(NULL, svallen);
+    double *vec = (double*)sval;
+    int i;
+    for (i=3; i<argc; i++) {
+        if (REDISMODULE_OK != RedisModule_StringToDouble(argv[i], vec+i-3)) {
+            return RedisModule_WrongArity(ctx);
+        }
+    }
+
+    int n = uniquePush(unique, skey, sval, merge_int64);
+    if (n == -1) {
+        RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    } else {
+        RedisModule_ReplyWithLongLong(ctx, n);
+    }
+    RedisModule_ReplicateVerbatim(ctx);
+    return REDISMODULE_OK;
+}
+
+
 int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 2) {
         return RedisModule_WrongArity(ctx);
@@ -96,6 +203,87 @@ int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     }
     return REDISMODULE_OK;
 }
+
+int UniquePopIVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+
+    int type = RedisModule_KeyType(key);
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
+
+    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    unique *unique = RedisModule_ModuleTypeGetValue(key);
+    
+    sds skey, sval;
+    int r = uniquePop(unique, &skey, &sval);
+    if (r == 0) {
+        int i, n = sdslen(sval)/8;
+        RedisModule_ReplyWithArray(ctx, 1+n);
+        RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
+        long long *pvec = (long long*)sval;
+        for (i=0; i<n; i++) {
+            RedisModule_ReplyWithLongLong(ctx, pvec[i]);
+        }
+        sdsfree(skey);
+        sdsfree(sval);
+    } else {
+        RedisModule_ReplyWithNull(ctx);
+    }
+    return REDISMODULE_OK;
+}
+
+int UniquePopFVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+
+    int type = RedisModule_KeyType(key);
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
+
+    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    unique *unique = RedisModule_ModuleTypeGetValue(key);
+    
+    sds skey, sval;
+    int r = uniquePop(unique, &skey, &sval);
+    if (r == 0) {
+        int i, n = sdslen(sval)/8;
+        RedisModule_ReplyWithArray(ctx, 1+n);
+        RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
+        double *pvec = (double*)sval;
+        for (i=0; i<n; i++) {
+            RedisModule_ReplyWithDouble(ctx, pvec[i]);
+        }
+        sdsfree(skey);
+        sdsfree(sval);
+    } else {
+        RedisModule_ReplyWithNull(ctx);
+    }
+    return REDISMODULE_OK;
+}
+
 
 int UniqueLenCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 2) {
@@ -274,7 +462,27 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
+    if (RedisModule_CreateCommand(ctx, "unique.pushiv", UniquePushIVCommand,
+                "write fast deny-oom", 1, 1,
+                -1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.pushfv", UniquePushFVCommand,
+                "write fast deny-oom", 1, 1,
+                -1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
     if (RedisModule_CreateCommand(ctx, "unique.pop", UniquePopCommand,
+                "write fast deny-oom", 1, 1,
+                1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.popiv", UniquePopIVCommand,
+                "write fast deny-oom", 1, 1,
+                1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.popfv", UniquePopFVCommand,
                 "write fast deny-oom", 1, 1,
                 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
