@@ -13,11 +13,11 @@ typedef struct unique{
     size_t mem;
 }unique;
 
-uint64_t hashCallback(const void *key) {
+uint64_t sdshashCallback(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 
-int compareCallback(void *privdata, const void *key1, const void *key2) {
+int sdscompareCallback(void *privdata, const void *key1, const void *key2) {
     int l1,l2;
     DICT_NOTUSED(privdata);
 
@@ -27,19 +27,19 @@ int compareCallback(void *privdata, const void *key1, const void *key2) {
     return memcmp(key1, key2, l1) == 0;
 }
 
-void freeCallback(void *privdata, void *val) {
+void sdsfreeCallback(void *privdata, void *val) {
     DICT_NOTUSED(privdata);
 
     sdsfree(val);
 }
 
 dictType uniqueDictType = {
-    hashCallback,
+    sdshashCallback,
     NULL,
     NULL,
-    compareCallback,
-    freeCallback,
-    freeCallback
+    sdscompareCallback,
+    sdsfreeCallback,
+    sdsfreeCallback
 };
 
 /* Create a new unique. The created unique can be freed with
@@ -90,10 +90,14 @@ void *merge_float64(void *old, void *new) {
 }
 
 int uniquePush(unique *unique, void *key, void *val) {
-    dictEntry *en = dictAddOrFind(unique->d, key);
-    if (en->v.val == NULL) {  // insert new
+    dictEntry *en;
+    dictEntry *entry, *existing;
+    entry = dictAddRaw(unique->d,key,&existing);
+    en = entry ? entry : existing;
+
+    if (entry) {  // insert new
         en->v.val = val;
-        unique->l = listAddNodeTail(unique->l, en);
+        listAddNodeTail(unique->l, en);
         return 1;
     } else {
         sdsfree(key);
@@ -102,21 +106,29 @@ int uniquePush(unique *unique, void *key, void *val) {
     return 0;
 }
 
-int uniquePop(unique *unique, void **key, void **val) {
+int uniquePop(unique *unique, void *pkey, void *pval) {
     listNode *node = listFirst(unique->l);
     if (node == NULL) {
         return -1;
     }
+    listDelNode(unique->l, node);
     dictEntry *en = node->value;
-    if (en == NULL) {
+    sds key, val;
+    if (!en) {
         return -1;
     }
-    listDelNode(unique->l, node);
-    *key = en->key;
-    *val = en->v.val;
-    en->key = en->v.val = NULL;
-    dictDelete(unique->d, en->key);
+    key = sdsdup(en->key);
+    val = en->v.val;
+    en->v.val = NULL;
+    *((sds*)pkey) = key;
+    *((sds*)pval) = val;
+    dictDelete(unique->d, en);
     return 0;
 }
+
+size_t uniqueLen(unique *unique) {
+    return listLength(unique->l);
+}
+
 
 

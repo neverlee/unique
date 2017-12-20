@@ -5,7 +5,7 @@ clean:
 	$(MAKE) -C src clean
 
 .PHONY: unique
-redex:
+unique: libutil
 	$(MAKE) -C src
 
 .PHONY: libutil
