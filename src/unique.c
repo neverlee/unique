@@ -30,6 +30,43 @@ dictType uniqueDictType = {
     keyFreeCallback  // val free
 };
 
+int UniqueGetAllCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    if (argc != 2) {
+        return RedisModule_WrongArity(ctx);
+    }
+    RedisModule_AutoMemory(ctx);
+
+    // open the key and make sure it is indeed a Hash and not empty
+    RedisModuleKey *key =
+        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
+
+    int type = RedisModule_KeyType(key);
+    if (type == REDISMODULE_KEYTYPE_EMPTY) {
+        RedisModule_ReplyWithNull(ctx);
+        return REDISMODULE_OK;
+    }
+
+    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
+        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
+    }
+
+    dict *d = (dict*)RedisModule_ModuleTypeGetValue(key);
+    
+    dictIterator *it = dictGetIterator(d);
+    // dictIterator *dictGetSafeIterator(dict *d);
+    dictEntry *et;
+    int n = 0;
+    RedisModule_ReplyWithArray(ctx,REDISMODULE_POSTPONED_ARRAY_LEN);
+    for (n =0 ;NULL != (et = dictNext(it)); n +=2) {
+        RedisModule_ReplyWithLongLong(ctx, (long long)et->key);
+        RedisModule_ReplyWithLongLong(ctx, et->v.u64);
+    }
+    dictReleaseIterator(it);
+    RedisModule_ReplySetArrayLength(ctx,n);
+
+    return REDISMODULE_OK;
+}
+
 
 int UniqueGetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     if (argc != 3) {
@@ -99,11 +136,9 @@ int UniqueSetCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
         d = (dict*)RedisModule_ModuleTypeGetValue(key);
     }
 
-    if (DICT_OK == dictAdd(d, (void*)k,(void*)v)) {
-        RedisModule_ReplyWithSimpleString(ctx, "OK");
-    } else {
-        RedisModule_ReplyWithSimpleString(ctx, "FAIL");
-    }
+    dictEntry *entry = dictAddOrFind(d, (void*)k);
+    entry->v.u64 = v;
+    RedisModule_ReplyWithSimpleString(ctx, "OK");
 
     return REDISMODULE_OK;
 }
@@ -208,6 +243,10 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
 
     if (RedisModule_CreateCommand(ctx, "unique.get", UniqueGetCommand,
                 "readonly fast", 1, 1, 1) == REDISMODULE_ERR)
+        return REDISMODULE_ERR;
+
+    if (RedisModule_CreateCommand(ctx, "unique.getall", UniqueGetAllCommand,
+                "readonly", 1, 1, 1) == REDISMODULE_ERR)
         return REDISMODULE_ERR;
 
     return REDISMODULE_OK;
