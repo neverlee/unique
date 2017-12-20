@@ -3,6 +3,8 @@
 #include <ctype.h>
 #include "unique.h"
 #include "sds.h"
+#include "adlist.h"
+#include "dict.h"
 
 static RedisModuleType *UniqueType;
 
@@ -123,33 +125,49 @@ void *UniqueTypeRdbLoad(RedisModuleIO *rdb, int encver) {
         /* RedisModule_Log("warning","Can't load data with version %d", encver);*/
         return NULL;
     }
-    // uint64_t elements = RedisModule_LoadUnsigned(rdb);
-    // struct UniqueTypeObject *hto = createUniqueTypeObject();
-    // while(elements--) {
-    //     int64_t ele = RedisModule_LoadSigned(rdb);
-    //     UniqueTypeInsert(hto,ele);
-    // }
-    // return hto;
-    return NULL;
+
+    uint64_t elements = RedisModule_LoadUnsigned(rdb);
+    
+    unique *unique = uniqueCreate();
+    char *pkey, *pval;
+    size_t lkey, lval;
+    sds key, val;
+    while(elements--) {
+        pkey = RedisModule_LoadStringBuffer(rdb, &lkey);
+        pval = RedisModule_LoadStringBuffer(rdb, &lval);
+        key = sdsnewlen(pkey, lkey);
+        val = sdsnewlen(pval, lval);
+        RedisModule_Free(pkey);
+        RedisModule_Free(pval);
+        uniquePush(unique, key, val, retain_new);
+    }
+    return unique;
 }
 
 void UniqueTypeRdbSave(RedisModuleIO *rdb, void *value) {
-    // struct UniqueTypeObject *hto = value;
-    // struct UniqueTypeNode *node = hto->head;
-    // RedisModule_SaveUnsigned(rdb,hto->len);
-    // while(node) {
-    //     RedisModule_SaveSigned(rdb,node->value);
-    //     node = node->next;
-    // }
+    unique *unique = value;
+    listIter *it = listGetIterator(unique->l, AL_START_HEAD);
+    listNode *node;
+    RedisModule_SaveUnsigned(rdb, listLength(unique->l));
+    for (node = listNext(it); node; node = listNext(it)) {
+        dictEntry *en = node->value;
+        RedisModule_SaveStringBuffer(rdb, en->key, sdslen(en->key));
+        RedisModule_SaveStringBuffer(rdb, en->v.val, sdslen(en->v.val));
+    }
 }
 
 void UniqueTypeAofRewrite(RedisModuleIO *aof, RedisModuleString *key, void *value) {
-    // struct UniqueTypeObject *hto = value;
-    // struct UniqueTypeNode *node = hto->head;
-    // while(node) {
-    //     RedisModule_EmitAOF(aof,"HELLOTYPE.INSERT","sl",key,node->value);
-    //     node = node->next;
-    // }
+    unique *unique = value;
+    listIter *it = listGetIterator(unique->l, AL_START_HEAD);
+    listNode *node;
+    sds k, v;
+    for (node = listNext(it); node; node = listNext(it)) {
+        dictEntry *en = node->value;
+        k = en->key;
+        v = en->v.val;
+        RedisModule_EmitAOF(aof,"unique.push","sbb",key,k, sdslen(k), v, sdslen(v));
+    }
+
 }
 
 /* The goal of this function is to return the amount of memory used by
@@ -167,12 +185,14 @@ void UniqueTypeFree(void *value) {
 }
 
 void UniqueTypeDigest(RedisModuleDigest *md, void *value) {
-    // dict *d = (dict*)value
-    // dictIterator *it = dictGetIterator(d);
-    // dictIterator *dictGetSafeIterator(d);
-    // dictEntry *dictNext(dictIterator *iter);
-    // void dictReleaseIterator(dictIterator *iter);
-    // RedisModule_DigestAddLongLong(md,node->value);
+    unique *unique = value;
+    listIter *it = listGetIterator(unique->l, AL_START_HEAD);
+    listNode *node;
+    for (node = listNext(it); node; node = listNext(it)) {
+        dictEntry *en = node->value;
+        RedisModule_DigestAddStringBuffer(md, en->key, sdslen(en->key));
+        RedisModule_DigestAddStringBuffer(md, en->v.val, sdslen(en->v.val));
+    }
     RedisModule_DigestEndSequence(md);
 }
 

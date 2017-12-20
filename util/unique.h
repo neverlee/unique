@@ -1,7 +1,15 @@
 #ifndef __UNIQUE_H__
 #define __UNIQUE_H__
 
-typedef struct unique unique;
+#include "adlist.h"
+#include "dict.h"
+
+typedef struct unique{
+    dict *d;
+    list *l;
+    size_t mem;
+}unique;
+
 
 typedef int mergefn(void *old, void *new, void **merge);
 
