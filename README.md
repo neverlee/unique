@@ -1,4 +1,4 @@
- Unique
+# Unique
 Redis module. Provide unique queue in the redis.
 just like [hashvector](https://github.com/neverlee/hashvector) support int64 vector and float64 vector
 
