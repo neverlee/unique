@@ -3,7 +3,7 @@ Redis module. Provide unique queue in the redis.
 just like [hashvector](https://github.com/neverlee/hashvector) support int64 vector and float64 vector
 
 ## Unique queue
-What is the unique queue? A bit like priority queue, you can not  put two same key object into the queue. But the order is still FIFO ( first in, first out ).
+What is the unique queue? A bit like priority queue, you can not put two same key object into the queue. But the order is still FIFO ( first in, first out ). The data structure is like LRU cache.
 
 ## API
 * unique.pushup key field value
