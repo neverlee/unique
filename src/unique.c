@@ -157,7 +157,7 @@ int UniquePushFVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
         }
     }
 
-    int n = uniquePush(unique, skey, sval, merge_int64);
+    int n = uniquePush(unique, skey, sval, merge_float64);
     if (n == -1) {
         RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
     } else {
