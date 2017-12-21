@@ -130,10 +130,14 @@ int uniquePush(unique *unique, void *key, void *val, mergefn fn) {
     if (entry) {
         en->v.val = val;
         listAddNodeTail(unique->l, en);
+        unique->mem += sdsalloc(key) + sdsalloc(val);
         return 1;
     } else {
         sdsfree(key);
-        return fn(en->v.val, val, &(en->v.val));
+        unique->mem -= sdsalloc(en->v.val)
+        int r = fn(en->v.val, val, &(en->v.val));
+        unique->mem += sdsalloc(en->v.val)
+        return r;
     }
 }
 
@@ -150,6 +154,7 @@ int uniquePop(unique *unique, void *pkey, void *pval) {
     }
     key = sdsdup(en->key);
     val = en->v.val;
+    unique.mem -= (sdsalloc(key) + sdsalloc(val));
     en->v.val = NULL;
     *((sds*)pkey) = key;
     *((sds*)pval) = val;
