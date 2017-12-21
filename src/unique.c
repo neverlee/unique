@@ -167,8 +167,34 @@ int UniquePushFVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
     return REDISMODULE_OK;
 }
 
+typedef void PopReplyCB(RedisModuleCtx *ctx, sds skey, sds sval);
 
-int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+static void PopReplyString(RedisModuleCtx *ctx, sds skey, sds sval) {
+    RedisModule_ReplyWithArray(ctx, 2);
+    RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
+    RedisModule_ReplyWithStringBuffer(ctx, sval, sdslen(sval));
+}
+static void PopReplyIV(RedisModuleCtx *ctx, sds skey, sds sval) {
+    int i, n = sdslen(sval)/8;
+    RedisModule_ReplyWithArray(ctx, 1+n);
+    RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
+    long long *pvec = (long long*)sval;
+    for (i=0; i<n; i++) {
+        RedisModule_ReplyWithLongLong(ctx, pvec[i]);
+    }
+}
+static void PopReplyFV(RedisModuleCtx *ctx, sds skey, sds sval) {
+    int i, n = sdslen(sval)/8;
+    RedisModule_ReplyWithArray(ctx, 1+n);
+    RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
+    long long *pvec = (long long*)sval;
+    for (i=0; i<n; i++) {
+        RedisModule_ReplyWithLongLong(ctx, pvec[i]);
+    }
+}
+
+int UniquePopCommandHelper(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
+        PopReplyCB replycb) {
     if (argc != 2) {
         return RedisModule_WrongArity(ctx);
     }
@@ -193,95 +219,26 @@ int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     sds skey, sval;
     int r = uniquePop(unique, &skey, &sval);
     if (r == 0) {
-        RedisModule_ReplyWithArray(ctx, 2);
-        RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
-        RedisModule_ReplyWithStringBuffer(ctx, sval, sdslen(sval));
+        replycb(ctx, skey, sval);
         sdsfree(skey);
         sdsfree(sval);
     } else {
         RedisModule_ReplyWithNull(ctx);
     }
     return REDISMODULE_OK;
+}
+
+
+int UniquePopCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
+    return UniquePopCommandHelper(ctx, argv, argc, PopReplyString);
 }
 
 int UniquePopIVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 2) {
-        return RedisModule_WrongArity(ctx);
-    }
-    RedisModule_AutoMemory(ctx);
-
-    // open the key and make sure it is indeed a Hash and not empty
-    RedisModuleKey *key =
-        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-
-    int type = RedisModule_KeyType(key);
-    if (type == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
-    }
-
-    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
-    }
-
-    unique *unique = RedisModule_ModuleTypeGetValue(key);
-    
-    sds skey, sval;
-    int r = uniquePop(unique, &skey, &sval);
-    if (r == 0) {
-        int i, n = sdslen(sval)/8;
-        RedisModule_ReplyWithArray(ctx, 1+n);
-        RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
-        long long *pvec = (long long*)sval;
-        for (i=0; i<n; i++) {
-            RedisModule_ReplyWithLongLong(ctx, pvec[i]);
-        }
-        sdsfree(skey);
-        sdsfree(sval);
-    } else {
-        RedisModule_ReplyWithNull(ctx);
-    }
-    return REDISMODULE_OK;
+    return UniquePopCommandHelper(ctx, argv, argc, PopReplyIV);
 }
 
 int UniquePopFVCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
-    if (argc != 2) {
-        return RedisModule_WrongArity(ctx);
-    }
-    RedisModule_AutoMemory(ctx);
-
-    // open the key and make sure it is indeed a Hash and not empty
-    RedisModuleKey *key =
-        RedisModule_OpenKey(ctx, argv[1], REDISMODULE_READ);
-
-    int type = RedisModule_KeyType(key);
-    if (type == REDISMODULE_KEYTYPE_EMPTY) {
-        RedisModule_ReplyWithNull(ctx);
-        return REDISMODULE_OK;
-    }
-
-    if (RedisModule_ModuleTypeGetType(key) != UniqueType) { 
-        return RedisModule_ReplyWithError(ctx,REDISMODULE_ERRORMSG_WRONGTYPE);
-    }
-
-    unique *unique = RedisModule_ModuleTypeGetValue(key);
-    
-    sds skey, sval;
-    int r = uniquePop(unique, &skey, &sval);
-    if (r == 0) {
-        int i, n = sdslen(sval)/8;
-        RedisModule_ReplyWithArray(ctx, 1+n);
-        RedisModule_ReplyWithStringBuffer(ctx, skey, sdslen(skey));
-        double *pvec = (double*)sval;
-        for (i=0; i<n; i++) {
-            RedisModule_ReplyWithDouble(ctx, pvec[i]);
-        }
-        sdsfree(skey);
-        sdsfree(sval);
-    } else {
-        RedisModule_ReplyWithNull(ctx);
-    }
-    return REDISMODULE_OK;
+    return UniquePopCommandHelper(ctx, argv, argc, PopReplyFV);
 }
 
 
